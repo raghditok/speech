@@ -425,22 +425,31 @@
         function cleanVTTContent(vttContent) {
             const lines = vttContent.split('\n');
             let cleanedContent = [];
+            let timestamps = [];
             
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
                 
-                if (!line.includes('-->') && !line.includes('WEBVTT') && !/^\d+$/.test(line)) {
+                if (line.includes('-->')) {
+                    timestamps.push(line);
+                } else if (!line.includes('WEBVTT') && !/^\d+$/.test(line) && line) {
                     // Remove punctuation and special characters, keep only words
                     const cleanedLine = line.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،.]/g, "")
                                           .replace(/\s+/g, " ")
                                           .trim();
                     if (cleanedLine) {
-                        cleanedContent.push(cleanedLine);
+                        cleanedContent.push({
+                            timestamp: timestamps[timestamps.length - 1],
+                            text: cleanedLine
+                        });
                     }
                 }
             }
             
-            return cleanedContent.join('\n');
+            return {
+                content: cleanedContent.map(item => item.text).join('\n'),
+                timestamps: cleanedContent.map(item => item.timestamp)
+            };
         }
 
         function getFileNameWithoutExtension(filename) {
@@ -455,6 +464,9 @@
 
             const title = getFileNameWithoutExtension(currentAudioFile.name);
             const savedItems = JSON.parse(localStorage.getItem('savedItems') || '[]');
+            
+            // Process VTT content
+            const cleanedVTT = cleanVTTContent(currentVTTContent);
             
             // Convert audio file to base64
             const reader = new FileReader();
@@ -471,7 +483,8 @@
                     },
                     vtt: {
                         name: currentVTTFile.name,
-                        content: cleanVTTContent(currentVTTContent)
+                        content: cleanedVTT.content,
+                        timestamps: cleanedVTT.timestamps
                     }
                 };
 
@@ -490,6 +503,21 @@
             };
             
             reader.readAsDataURL(currentAudioFile);
+        }
+
+        function reconstructVTTContent(item) {
+            let vttContent = 'WEBVTT\n\n';
+            const lines = item.vtt.content.split('\n');
+            
+            lines.forEach((line, index) => {
+                if (item.vtt.timestamps[index]) {
+                    vttContent += (index + 1) + '\n';
+                    vttContent += item.vtt.timestamps[index] + '\n';
+                    vttContent += line + '\n\n';
+                }
+            });
+            
+            return vttContent;
         }
 
         function displaySavedItems() {
@@ -532,12 +560,13 @@
                     audioPlayer.src = URL.createObjectURL(file);
                 });
 
-            // Load VTT
-            const vttBlob = new Blob([item.vtt.content], { type: 'text/vtt' });
+            // Reconstruct and load VTT
+            const vttContent = reconstructVTTContent(item);
+            const vttBlob = new Blob([vttContent], { type: 'text/vtt' });
             currentVTTFile = new File([vttBlob], item.vtt.name, { type: 'text/vtt' });
-            currentVTTContent = item.vtt.content;
+            currentVTTContent = vttContent;
             document.getElementById('vttFileName').textContent = item.vtt.name;
-            processVTTContent(item.vtt.content);
+            processVTTContent(vttContent);
         }
 
         // Update file input handlers
