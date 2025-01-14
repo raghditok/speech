@@ -13,6 +13,7 @@
             --text-color: #333;
             --border-radius: 8px;
             --highlight-color: #ffeb3b;
+            --sidebar-width: 300px;
         }
 
         body {
@@ -28,10 +29,27 @@
 
         .container {
             display: flex;
-            flex-direction: column;
             height: 100vh;
+            padding: 0;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: white;
+            border-right: 1px solid #ddd;
+            padding: 20px;
+            overflow-y: auto;
+            height: 100vh;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             padding: 10px;
-            box-sizing: border-box;
+            height: 100vh;
+            overflow: hidden;
         }
 
         .uploader {
@@ -83,17 +101,19 @@
             background-color: white;
             border-radius: var(--border-radius);
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            text-align: justify;
+            text-align: left;
             font-size: 24px;
             line-height: 1.8;
+            direction: ltr;
         }
 
         .vtt-text {
-            display: inline;
+            display: inline-block;
             cursor: pointer;
             padding: 2px 4px;
+            margin: 0 2px;
             border-radius: 3px;
-            transition: all 0.2s ease;
+            transition: background-color 0.2s ease;
         }
 
         .vtt-text:hover {
@@ -104,9 +124,22 @@
             background-color: var(--highlight-color);
         }
 
-        .vtt-text::after {
-            content: " ";
-            white-space: pre-wrap;
+        .vtt-word {
+            display: inline-block;
+            padding: 0 2px;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+            direction: ltr;
+            text-align: left;
+        }
+
+        .vtt-word.active {
+            background-color: var(--highlight-color);
+        }
+
+        .vtt-word:hover {
+            background-color: #e9ecef;
+            cursor: pointer;
         }
 
         #audioPlayer {
@@ -147,6 +180,70 @@
             background-color: #f44336;
         }
 
+        .saved-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: var(--background-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .saved-item:hover {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        .saved-item h3 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+        }
+
+        .saved-item p {
+            margin: 0;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .delete-btn {
+            float: right;
+            color: #f44336;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .delete-btn:hover {
+            color: #d32f2f;
+        }
+
+        .save-form {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: var(--background-color);
+            border-radius: var(--border-radius);
+        }
+
+        .save-form input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .save-btn {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .save-btn:hover {
+            background-color: var(--secondary-color);
+        }
+
         /* تحسين التمرير */
         .vtt-viewer::-webkit-scrollbar {
             width: 10px;
@@ -169,27 +266,38 @@
 </head>
 <body>
     <div class="container">
-        <div class="uploader">
-            <div>
-                <label for="audioFile" class="button">تحميل ملف صوتي</label>
-                <input type="file" id="audioFile" accept="audio/*">
-                <span class="file-name" id="audioFileName"></span>
+        <div class="sidebar">
+            <div class="save-form">
+                <button class="save-btn" onclick="saveCurrentPair()">حفظ المقطع الحالي</button>
             </div>
-
-            <div>
-                <label for="vttFile" class="button">تحميل ملف التزامن</label>
-                <input type="file" id="vttFile" accept=".vtt">
-                <span class="file-name" id="vttFileName"></span>
+            <div id="savedItems">
+                <!-- Saved items will be displayed here -->
             </div>
-        </div>
-
-        <div class="content-area">
-            <div id="vttViewer" class="vtt-viewer"></div>
         </div>
         
-        <audio id="audioPlayer" controls>
-            <track id="subtitlesTrack" kind="subtitles" default>
-        </audio>
+        <div class="main-content">
+            <div class="uploader">
+                <div>
+                    <label for="audioFile" class="button">تحميل ملف صوتي</label>
+                    <input type="file" id="audioFile" accept="audio/*">
+                    <span class="file-name" id="audioFileName"></span>
+                </div>
+
+                <div>
+                    <label for="vttFile" class="button">تحميل ملف التزامن</label>
+                    <input type="file" id="vttFile" accept=".vtt">
+                    <span class="file-name" id="vttFileName"></span>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div id="vttViewer" class="vtt-viewer"></div>
+            </div>
+            
+            <audio id="audioPlayer" controls>
+                <track id="subtitlesTrack" kind="subtitles" default>
+            </audio>
+        </div>
     </div>
 
     <script>
@@ -198,157 +306,275 @@
         const vttInput = document.getElementById('vttFile');
         const subtitlesTrack = document.getElementById('subtitlesTrack');
         const vttViewer = document.getElementById('vttViewer');
+        
+        let wordTimings = [];
+        let currentWordIndex = -1;
+        let currentAudioFile = null;
+        let currentVTTFile = null;
+        let currentVTTContent = null;
 
-        let syncEnabled = true;
-        let vttCues = [];
+        function processVTTContent(vttContent) {
+            const lines = vttContent.split('\n');
+            let currentCue = null;
+            wordTimings = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.includes('-->')) {
+                    const [startTime, endTime] = line.split('-->').map(t => t.trim());
+                    const start = timestampToSeconds(startTime);
+                    const end = timestampToSeconds(endTime);
+                    currentCue = { start, end };
+                } else if (line && currentCue && !line.includes('WEBVTT') && !/^\d+$/.test(line)) {
+                    // Clean the line from punctuation before splitting into words
+                    const cleanedLine = line.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،.]/g, "")
+                                          .replace(/\s+/g, " ")
+                                          .trim();
+                    const words = cleanedLine.split(/\s+/);
+                    const totalDuration = currentCue.end - currentCue.start;
+                    const wordDuration = totalDuration / words.length;
+                    
+                    words.forEach((word, index) => {
+                        if (word.trim()) {
+                            const wordStart = currentCue.start + (wordDuration * index);
+                            const wordEnd = wordStart + wordDuration;
+                            wordTimings.push({
+                                word: word.trim(),
+                                start: wordStart,
+                                end: wordEnd
+                            });
+                        }
+                    });
+                }
+            }
+            
+            displayWords();
+        }
+        
+        function displayWords() {
+            vttViewer.innerHTML = '';
+            const container = document.createElement('div');
+            container.style.direction = 'ltr';
+            container.style.textAlign = 'left';
+            
+            wordTimings.forEach((timing, index) => {
+                const wordSpan = document.createElement('span');
+                wordSpan.className = 'vtt-word';
+                wordSpan.textContent = timing.word;
+                wordSpan.dataset.index = index;
+                wordSpan.dataset.start = timing.start;
+                wordSpan.dataset.end = timing.end;
+                
+                wordSpan.onclick = () => {
+                    audioPlayer.currentTime = timing.start;
+                    audioPlayer.play();
+                };
+                
+                container.appendChild(wordSpan);
+                
+                // Add space after each word
+                if (index < wordTimings.length - 1) {
+                    container.appendChild(document.createTextNode(' '));
+                }
+            });
+            
+            vttViewer.appendChild(container);
+        }
+        
+        function updateWordHighlight() {
+            const currentTime = audioPlayer.currentTime;
+            
+            // Find the current word based on timing
+            const newWordIndex = wordTimings.findIndex(timing => 
+                currentTime >= timing.start && currentTime <= timing.end
+            );
+            
+            if (newWordIndex !== currentWordIndex) {
+                // Remove highlight from all words
+                const words = document.querySelectorAll('.vtt-word');
+                words.forEach(word => word.classList.remove('active'));
+                
+                // Add highlight to current word
+                if (newWordIndex !== -1) {
+                    const currentWord = words[newWordIndex];
+                    if (currentWord) {
+                        currentWord.classList.add('active');
+                        // Smooth scroll to the current word
+                        currentWord.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'center'
+                        });
+                    }
+                }
+                
+                currentWordIndex = newWordIndex;
+            }
+        }
 
-        // تحميل ملف VTT
+        function timestampToSeconds(timestamp) {
+            if (!timestamp) return 0;
+            
+            // Handle both formats: 00:00:00.000 and 00:00:00
+            const [time] = timestamp.split('.');
+            const [hours, minutes, seconds] = time.split(':').map(Number);
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+        
+        function cleanVTTContent(vttContent) {
+            const lines = vttContent.split('\n');
+            let cleanedContent = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (!line.includes('-->') && !line.includes('WEBVTT') && !/^\d+$/.test(line)) {
+                    // Remove punctuation and special characters, keep only words
+                    const cleanedLine = line.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،.]/g, "")
+                                          .replace(/\s+/g, " ")
+                                          .trim();
+                    if (cleanedLine) {
+                        cleanedContent.push(cleanedLine);
+                    }
+                }
+            }
+            
+            return cleanedContent.join('\n');
+        }
+
+        function getFileNameWithoutExtension(filename) {
+            return filename.replace(/\.[^/.]+$/, "");
+        }
+
+        function saveCurrentPair() {
+            if (!currentAudioFile || !currentVTTFile || !currentVTTContent) {
+                alert('الرجاء تحميل الملفات أولاً');
+                return;
+            }
+
+            const title = getFileNameWithoutExtension(currentAudioFile.name);
+            const savedItems = JSON.parse(localStorage.getItem('savedItems') || '[]');
+            
+            // Convert audio file to base64
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const audioBase64 = e.target.result;
+                
+                const newItem = {
+                    id: Date.now(),
+                    title: title,
+                    audio: {
+                        name: currentAudioFile.name,
+                        type: currentAudioFile.type,
+                        data: audioBase64
+                    },
+                    vtt: {
+                        name: currentVTTFile.name,
+                        content: cleanVTTContent(currentVTTContent)
+                    }
+                };
+
+                // Check if item with same title exists
+                const existingIndex = savedItems.findIndex(item => item.title === title);
+                if (existingIndex !== -1) {
+                    if (confirm('يوجد مقطع بنفس الاسم. هل تريد استبداله؟')) {
+                        savedItems[existingIndex] = newItem;
+                    }
+                } else {
+                    savedItems.push(newItem);
+                }
+                
+                localStorage.setItem('savedItems', JSON.stringify(savedItems));
+                displaySavedItems();
+            };
+            
+            reader.readAsDataURL(currentAudioFile);
+        }
+
+        function displaySavedItems() {
+            const savedItems = JSON.parse(localStorage.getItem('savedItems') || '[]');
+            const container = document.getElementById('savedItems');
+            container.innerHTML = '';
+
+            savedItems.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'saved-item';
+                itemElement.innerHTML = `
+                    <span class="delete-btn" onclick="deleteItem(${item.id}, event)">×</span>
+                    <h3>${item.title}</h3>
+                    <p>${item.audio.name}</p>
+                `;
+                
+                itemElement.onclick = () => loadSavedItem(item);
+                container.appendChild(itemElement);
+            });
+        }
+
+        function deleteItem(id, event) {
+            event.stopPropagation();
+            if (confirm('هل أنت متأكد من حذف هذا المقطع؟')) {
+                const savedItems = JSON.parse(localStorage.getItem('savedItems') || '[]');
+                const updatedItems = savedItems.filter(item => item.id !== id);
+                localStorage.setItem('savedItems', JSON.stringify(updatedItems));
+                displaySavedItems();
+            }
+        }
+
+        function loadSavedItem(item) {
+            // Load audio
+            fetch(item.audio.data)
+                .then(res => res.blob())
+                .then(blob => {
+                    const file = new File([blob], item.audio.name, { type: item.audio.type });
+                    currentAudioFile = file;
+                    document.getElementById('audioFileName').textContent = file.name;
+                    audioPlayer.src = URL.createObjectURL(file);
+                });
+
+            // Load VTT
+            const vttBlob = new Blob([item.vtt.content], { type: 'text/vtt' });
+            currentVTTFile = new File([vttBlob], item.vtt.name, { type: 'text/vtt' });
+            currentVTTContent = item.vtt.content;
+            document.getElementById('vttFileName').textContent = item.vtt.name;
+            processVTTContent(item.vtt.content);
+        }
+
+        // Update file input handlers
+        audioInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                currentAudioFile = file;
+                document.getElementById('audioFileName').textContent = file.name;
+                if (file.type.startsWith('audio/')) {
+                    const url = URL.createObjectURL(file);
+                    audioPlayer.src = url;
+                    audioPlayer.play().catch(error => {
+                        console.log('تعذر التشغيل التلقائي:', error);
+                    });
+                }
+            }
+        });
+
         vttInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
+                currentVTTFile = file;
                 document.getElementById('vttFileName').textContent = file.name;
                 const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const vttContent = e.target.result;
-                    const url = URL.createObjectURL(file);
-                    subtitlesTrack.src = url;
-                    
-                    // عرض محتوى VTT
-                    vttViewer.innerHTML = '';
-                    const lines = vttContent.split('\n');
-                    vttCues = [];
-                    
-                    let currentTimestamp = '';
-                    let lineTimestamp = '';
-                    let paragraph = document.createElement('p');
-                    paragraph.style.marginBottom = '1em';
-                    
-                    for (let i = 0; i < lines.length; i++) {
-                        const line = lines[i].trim();
-                        
-                        // حفظ التوقيت
-                        if (/\d{2}:\d{2}:\d{2}/.test(line)) {
-                            currentTimestamp = line.split(' --> ')[0];
-                            continue;
-                        }
-                        
-                        // تخطي السطر إذا كان:
-                        // - فارغاً
-                        // - يحتوي على WEBVTT
-                        // - يحتوي على أرقام فقط
-                        if (!line || 
-                            line.includes('WEBVTT') || 
-                            /^\d+$/.test(line)) {
-                            continue;
-                        }
-                        
-                        // حفظ التوقيت الحالي لهذا السطر
-                        lineTimestamp = currentTimestamp;
-                        
-                        const span = document.createElement('span');
-                        span.className = 'vtt-text';
-                        span.textContent = line;
-                        
-                        // تخزين التوقيت مع النص
-                        if (lineTimestamp) {
-                            const timestamp = lineTimestamp;
-                            span.dataset.timestamp = timestamp;
-                            
-                            // إضافة مستمع حدث النقر
-                            span.addEventListener('click', () => {
-                                const time = timestampToSeconds(timestamp);
-                                audioPlayer.currentTime = time;
-                                audioPlayer.play();
-                            });
-                        }
-                        
-                        paragraph.appendChild(span);
-                        vttCues.push({
-                            text: line,
-                            element: span,
-                            timestamp: lineTimestamp
-                        });
-
-                        // إضافة فقرة جديدة بعد كل 4-5 جمل
-                        if (vttCues.length % 5 === 0) {
-                            vttViewer.appendChild(paragraph);
-                            paragraph = document.createElement('p');
-                            paragraph.style.marginBottom = '1em';
-                        }
-                    }
-
-                    // إضافة الفقرة الأخيرة إذا كانت تحتوي على نص
-                    if (paragraph.childNodes.length > 0) {
-                        vttViewer.appendChild(paragraph);
-                    }
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    currentVTTContent = content;
+                    processVTTContent(content);
                 };
                 reader.readAsText(file);
             }
         });
 
-        // تحميل الملف الصوتي
-        audioInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                document.getElementById('audioFileName').textContent = file.name;
-            }
-            if (file && file.type.startsWith('audio/')) {
-                const url = URL.createObjectURL(file);
-                audioPlayer.src = url;
-                audioPlayer.play().catch(error => {
-                    console.log('تعذر التشغيل التلقائي:', error);
-                });
-            }
-        });
+        // Load saved items on page load
+        displaySavedItems();
 
-        // إزالة جميع التحديدات
-        function clearHighlights() {
-            vttCues.forEach(cue => {
-                cue.element.classList.remove('current');
-            });
-        }
-
-        // تحويل التوقيت إلى ثواني
-        function timestampToSeconds(timestamp) {
-            if (!timestamp) return 0;
-            const [time] = timestamp.split('.');
-            const [hours, minutes, seconds] = time.split(':').map(Number);
-            return hours * 3600 + minutes * 60 + seconds;
-        }
-
-        // معالجة أحداث التزامن
-        audioPlayer.addEventListener('timeupdate', () => {
-            if (!syncEnabled) return;
-
-            const track = audioPlayer.textTracks[0];
-            if (track && track.activeCues && track.activeCues.length > 0) {
-                const cue = track.activeCues[0];
-                highlightText(cue.text);
-            } else {
-                clearHighlights();
-            }
-        });
-
-        // تمييز النص
-        function highlightText(text) {
-            if (!syncEnabled || !text.trim()) return;
-
-            clearHighlights();
-            
-            const searchText = text.toLowerCase().trim();
-            const matchedCue = vttCues.find(cue => 
-                cue.text.toLowerCase().includes(searchText) || 
-                searchText.includes(cue.text.toLowerCase())
-            );
-
-            if (matchedCue) {
-                matchedCue.element.classList.add('current');
-                matchedCue.element.scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'center'
-                });
-            }
-        }
+        audioPlayer.addEventListener('timeupdate', updateWordHighlight);
     </script>
 </body>
 </html>
