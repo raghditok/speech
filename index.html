@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>قارئ النصوص المتزامن</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0"></script>
     <style>
         :root {
             --primary-color: #2196F3;
@@ -381,11 +380,21 @@
         let pipeline = null;
         async function initWhisper() {
             try {
-                pipeline = await pipeline || transformers.pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
-                showStatus("Whisper model loaded successfully");
+                const { pipeline: Pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js');
+                pipeline = await Pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+                    quantized: true,
+                    progress_callback: function(progress) {
+                        if (progress.status === 'progress') {
+                            const percentage = Math.round(progress.progress * 100);
+                            showStatus(`Loading model: ${percentage}%`);
+                        } else if (progress.status === 'ready') {
+                            showStatus("Model loaded successfully!");
+                        }
+                    }
+                });
             } catch (error) {
                 console.error('Error loading Whisper:', error);
-                showStatus("Error loading Whisper model");
+                showStatus("Error loading Whisper model. Please check console for details.");
             }
         }
 
@@ -395,12 +404,23 @@
         function showStatus(message) {
             statusMessage.textContent = message;
             statusMessage.classList.add('show');
+            // Keep error messages longer
+            const duration = message.includes('Error') ? 5000 : 3000;
             setTimeout(() => {
                 statusMessage.classList.remove('show');
-            }, 3000);
+            }, duration);
         }
 
         async function transcribeAudio(audioFile) {
+            if (!pipeline) {
+                showStatus("Loading Whisper model...");
+                await initWhisper();
+                if (!pipeline) {
+                    showStatus("Failed to load Whisper model. Please refresh and try again.");
+                    return;
+                }
+            }
+
             try {
                 showStatus("Starting transcription...");
                 
@@ -417,22 +437,32 @@
                 source.start();
                 const monoBuffer = await offlineContext.startRendering();
                 
+                showStatus("Processing audio...");
                 // Process with Whisper
                 const result = await pipeline(monoBuffer, {
                     chunk_length_s: 30,
                     stride_length_s: 5,
                     return_timestamps: true,
                     language: 'en',
+                    task: 'transcribe'
                 });
 
+                if (!result || !result.chunks || result.chunks.length === 0) {
+                    showStatus("No speech detected in the audio file");
+                    return;
+                }
+
+                showStatus("Creating VTT file...");
                 // Convert to VTT format
                 let vttContent = 'WEBVTT\n\n';
                 result.chunks.forEach((chunk, index) => {
-                    const startTime = formatTimestamp(chunk.timestamp[0]);
-                    const endTime = formatTimestamp(chunk.timestamp[1]);
-                    vttContent += `${index + 1}\n`;
-                    vttContent += `${startTime} --> ${endTime}\n`;
-                    vttContent += `${chunk.text.trim()}\n\n`;
+                    if (chunk.timestamp && chunk.timestamp.length === 2) {
+                        const startTime = formatTimestamp(chunk.timestamp[0]);
+                        const endTime = formatTimestamp(chunk.timestamp[1]);
+                        vttContent += `${index + 1}\n`;
+                        vttContent += `${startTime} --> ${endTime}\n`;
+                        vttContent += `${chunk.text.trim()}\n\n`;
+                    }
                 });
 
                 // Create VTT file and process it
@@ -441,11 +471,11 @@
                 currentVTTContent = vttContent;
                 document.getElementById('vttFileName').textContent = 'transcription.vtt';
                 processVTTContent(vttContent);
-                showStatus("Transcription completed!");
+                showStatus("Transcription completed successfully!");
 
             } catch (error) {
                 console.error('Transcription error:', error);
-                showStatus("Error during transcription");
+                showStatus("Error during transcription: " + (error.message || "Unknown error"));
             }
         }
 
