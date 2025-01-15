@@ -378,42 +378,56 @@
 
         // Initialize the pipeline
         let pipeline = null;
+        let isLoading = false;
+
         async function initWhisper() {
+            if (isLoading) return;
+            isLoading = true;
+            
             try {
                 const { pipeline: Pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js');
+                showStatus("Initializing Whisper model...");
+                
                 pipeline = await Pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
                     quantized: true,
                     progress_callback: function(progress) {
-                        if (progress.status === 'progress') {
-                            const percentage = Math.round(progress.progress * 100);
-                            showStatus(`Loading model: ${percentage}%`);
+                        if (progress.status === 'download') {
+                            const percentage = Math.min(Math.round((progress.loaded / progress.total) * 100), 100);
+                            showStatus(`Downloading model: ${percentage}%`);
+                        } else if (progress.status === 'init') {
+                            showStatus("Initializing model...");
                         } else if (progress.status === 'ready') {
-                            showStatus("Model loaded successfully!");
+                            showStatus("Model ready!");
+                            setTimeout(() => statusMessage.classList.remove('show'), 1000);
                         }
                     }
                 });
             } catch (error) {
                 console.error('Error loading Whisper:', error);
-                showStatus("Error loading Whisper model. Please check console for details.");
+                showStatus("Error loading model. Please refresh and try again.");
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        function showStatus(message) {
+            statusMessage.textContent = message;
+            statusMessage.classList.add('show');
+            
+            // Only auto-hide success messages
+            if (!message.includes('Error') && !message.includes('Loading') && !message.includes('Downloading')) {
+                setTimeout(() => {
+                    statusMessage.classList.remove('show');
+                }, 3000);
             }
         }
 
         // Load Whisper model when page loads
         initWhisper();
 
-        function showStatus(message) {
-            statusMessage.textContent = message;
-            statusMessage.classList.add('show');
-            // Keep error messages longer
-            const duration = message.includes('Error') ? 5000 : 3000;
-            setTimeout(() => {
-                statusMessage.classList.remove('show');
-            }, duration);
-        }
-
         async function transcribeAudio(audioFile) {
             if (!pipeline) {
-                showStatus("Loading Whisper model...");
+                showStatus("Initializing Whisper model...");
                 await initWhisper();
                 if (!pipeline) {
                     showStatus("Failed to load Whisper model. Please refresh and try again.");
