@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>قارئ النصوص المتزامن</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --primary-color: #2196F3;
@@ -31,6 +32,7 @@
             display: flex;
             height: 100vh;
             padding: 0;
+            position: relative;
         }
 
         .sidebar {
@@ -41,6 +43,43 @@
             overflow-y: auto;
             height: 100vh;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .sidebar.hidden {
+            transform: translateX(-100%);
+        }
+
+        .toggle-sidebar {
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            z-index: 1000;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: background-color 0.3s ease;
+        }
+
+        .toggle-sidebar:hover {
+            background-color: var(--secondary-color);
+        }
+
+        .toggle-sidebar i {
+            font-size: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar.hidden + .main-content .toggle-sidebar i {
+            transform: rotate(180deg);
         }
 
         .main-content {
@@ -276,6 +315,9 @@
         </div>
         
         <div class="main-content">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
             <div class="uploader">
                 <div>
                     <label for="audioFile" class="button">تحميل ملف صوتي</label>
@@ -608,6 +650,11 @@
         displaySavedItems();
 
         audioPlayer.addEventListener('timeupdate', updateWordHighlight);
+
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            sidebar.classList.toggle('hidden');
+        }
     </script>
 </body>
 </html>
