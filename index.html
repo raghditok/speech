@@ -43,15 +43,11 @@
             overflow-y: auto;
             height: 100vh;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            transition: all 0.3s ease-in-out;
-            position: relative;
-            flex-shrink: 0;
+            transition: transform 0.3s ease-in-out;
         }
 
         .sidebar.hidden {
             transform: translateX(-100%);
-            margin-left: calc(-1 * var(--sidebar-width));
-            width: 0;
         }
 
         .toggle-sidebar {
@@ -93,12 +89,6 @@
             padding: 10px;
             height: 100vh;
             overflow: hidden;
-            transition: margin-left 0.3s ease-in-out;
-            max-width: calc(100vw - 60px); /* Account for padding and toggle button */
-        }
-
-        .sidebar.hidden + .main-content {
-            margin-left: 0;
         }
 
         .uploader {
@@ -150,9 +140,6 @@
             background-color: white;
             border-radius: var(--border-radius);
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-width: 1200px;
-            margin: 0 auto;
-            width: 100%;
             text-align: left;
             font-size: 24px;
             line-height: 1.8;
@@ -183,10 +170,6 @@
             transition: all 0.2s ease;
             direction: ltr;
             text-align: left;
-            font-size: 18px;
-            line-height: 1.8;
-            max-width: 100%;
-            word-wrap: break-word;
         }
 
         .vtt-word.active {
