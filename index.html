@@ -440,12 +440,10 @@
             try {
                 showStatus("Preparing audio...");
                 
-                // Convert audio to the required format
-                const audioContext = new AudioContext({ sampleRate: 16000 }); // Fixed sample rate
+                const audioContext = new AudioContext({ sampleRate: 16000 });
                 const arrayBuffer = await audioFile.arrayBuffer();
                 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
                 
-                // Convert to mono and resample if needed
                 const offlineContext = new OfflineAudioContext({
                     numberOfChannels: 1,
                     length: Math.ceil(audioBuffer.duration * 16000),
@@ -461,8 +459,7 @@
                 const renderedBuffer = await offlineContext.startRendering();
                 const channelData = renderedBuffer.getChannelData(0);
 
-                // Process in chunks to avoid memory issues
-                const chunkSize = 30 * 16000; // 30 seconds chunks
+                const chunkSize = 30 * 16000;
                 const chunks = [];
                 let transcription = '';
 
@@ -488,7 +485,6 @@
                 }
 
                 showStatus("Creating VTT file...");
-                // Convert to VTT format
                 let vttContent = 'WEBVTT\n\n';
                 chunks.forEach((chunk, index) => {
                     if (chunk.timestamp && chunk.timestamp.length === 2) {
@@ -500,11 +496,14 @@
                     }
                 });
 
-                // Create VTT file and process it
+                console.log("Generated VTT content:", vttContent);
+
                 const vttBlob = new Blob([vttContent], { type: 'text/vtt' });
                 currentVTTFile = new File([vttBlob], 'transcription.vtt', { type: 'text/vtt' });
                 currentVTTContent = vttContent;
                 document.getElementById('vttFileName').textContent = 'transcription.vtt';
+
+                // Process and display the content
                 processVTTContent(vttContent);
                 showStatus("Transcription completed successfully!");
 
@@ -536,6 +535,7 @@
         });
 
         function processVTTContent(vttContent) {
+            console.log("Processing VTT content:", vttContent);
             const lines = vttContent.split('\n');
             let currentCue = null;
             wordTimings = [];
@@ -571,65 +571,40 @@
                 }
             }
             
+            console.log("Word timings created:", wordTimings);
             displayWords();
         }
         
         function displayWords() {
+            console.log("Displaying words, count:", wordTimings.length);
             const vttViewer = document.getElementById('vttViewer');
             vttViewer.innerHTML = '';
+            
+            if (wordTimings.length === 0) {
+                vttViewer.innerHTML = '<p>No text to display</p>';
+                return;
+            }
+
             const container = document.createElement('div');
             container.style.direction = 'ltr';
-            container.style.textAlign = 'left';
+            container.className = 'words-container';
             
             wordTimings.forEach((timing, index) => {
                 const wordSpan = document.createElement('span');
+                wordSpan.textContent = timing.word + ' ';
                 wordSpan.className = 'vtt-word';
-                wordSpan.textContent = timing.word;
                 wordSpan.dataset.index = index;
-                wordSpan.dataset.start = timing.start;
-                wordSpan.dataset.end = timing.end;
-                
                 wordSpan.onclick = () => {
                     audioPlayer.currentTime = timing.start;
-                    audioPlayer.play();
+                    audioPlayer.play().catch(error => {
+                        console.log('Playback failed:', error);
+                    });
                 };
-                
                 container.appendChild(wordSpan);
-                
-                // Add space after each word
-                if (index < wordTimings.length - 1) {
-                    container.appendChild(document.createTextNode(' '));
-                }
             });
             
             vttViewer.appendChild(container);
-        }
-        
-        function updateWordHighlight() {
-            const currentTime = audioPlayer.currentTime;
-            
-            // Find the current word based on timing
-            const newWordIndex = wordTimings.findIndex(timing => 
-                currentTime >= timing.start && currentTime <= timing.end
-            );
-            
-            if (newWordIndex !== -1) {
-                // Remove highlight from all words
-                const words = document.querySelectorAll('.vtt-word');
-                words.forEach(word => word.classList.remove('active'));
-                
-                // Add highlight to current word
-                const currentWord = words[newWordIndex];
-                if (currentWord) {
-                    currentWord.classList.add('active');
-                    // Smooth scroll to the current word
-                    currentWord.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center',
-                        inline: 'center'
-                    });
-                }
-            }
+            console.log("Words displayed in viewer");
         }
 
         function timestampToSeconds(timestamp) {
