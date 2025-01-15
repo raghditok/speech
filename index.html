@@ -283,29 +283,6 @@
             background-color: var(--secondary-color);
         }
 
-        .status-message {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background-color: var(--primary-color);
-            color: white;
-            padding: 10px 20px;
-            border-radius: var(--border-radius);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            display: none;
-            z-index: 1000;
-        }
-
-        .status-message.show {
-            display: block;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
         /* تحسين التمرير */
         .vtt-viewer::-webkit-scrollbar {
             width: 10px;
@@ -345,13 +322,13 @@
                 <div>
                     <label for="audioFile" class="button">تحميل ملف صوتي</label>
                     <input type="file" id="audioFile" accept="audio/*">
-                    <p id="audioFileName"></p>
+                    <span class="file-name" id="audioFileName"></span>
                 </div>
 
                 <div>
-                    <label for="vttFile" class="button">تحميل ملف الترجمة</label>
+                    <label for="vttFile" class="button">تحميل ملف التزامن</label>
                     <input type="file" id="vttFile" accept=".vtt">
-                    <p id="vttFileName"></p>
+                    <span class="file-name" id="vttFileName"></span>
                 </div>
             </div>
 
@@ -364,189 +341,21 @@
             </audio>
         </div>
     </div>
-    <div class="status-message" id="statusMessage"></div>
 
     <script>
         const audioPlayer = document.getElementById('audioPlayer');
         const audioInput = document.getElementById('audioFile');
         const vttInput = document.getElementById('vttFile');
-        const statusMessage = document.getElementById('statusMessage');
+        const subtitlesTrack = document.getElementById('subtitlesTrack');
+        const vttViewer = document.getElementById('vttViewer');
+        
         let wordTimings = [];
+        let currentWordIndex = -1;
         let currentAudioFile = null;
         let currentVTTFile = null;
-        let currentVTTContent = '';
-
-        // Initialize the pipeline
-        let pipeline = null;
-        let isLoading = false;
-
-        async function initWhisper() {
-            if (isLoading) return;
-            isLoading = true;
-            
-            try {
-                showStatus("Loading Whisper library...");
-                const { pipeline: Pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js');
-                
-                showStatus("Initializing Whisper model...");
-                pipeline = await Pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
-                    quantized: true,
-                    cache: true,
-                    progress_callback: function(progress) {
-                        if (progress.status === 'download') {
-                            const percentage = Math.min(Math.round((progress.loaded / progress.total) * 100), 100);
-                            showStatus(`Downloading model: ${percentage}%`);
-                        } else if (progress.status === 'init') {
-                            showStatus("Initializing model...");
-                        } else if (progress.status === 'ready') {
-                            showStatus("Model ready!");
-                            setTimeout(() => statusMessage.classList.remove('show'), 1000);
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error('Error loading Whisper:', error);
-                showStatus("Error loading model. Please refresh and try again.");
-            } finally {
-                isLoading = false;
-            }
-        }
-
-        function showStatus(message) {
-            statusMessage.textContent = message;
-            statusMessage.classList.add('show');
-            
-            // Only auto-hide success messages
-            if (!message.includes('Error') && !message.includes('Loading') && !message.includes('Downloading')) {
-                setTimeout(() => {
-                    statusMessage.classList.remove('show');
-                }, 3000);
-            }
-        }
-
-        // Load Whisper model when page loads
-        initWhisper();
-
-        async function transcribeAudio(audioFile) {
-            if (!pipeline) {
-                showStatus("Initializing Whisper model...");
-                await initWhisper();
-                if (!pipeline) {
-                    showStatus("Failed to load Whisper model. Please refresh and try again.");
-                    return;
-                }
-            }
-
-            try {
-                showStatus("Preparing audio...");
-                
-                const audioContext = new AudioContext({ sampleRate: 16000 });
-                const arrayBuffer = await audioFile.arrayBuffer();
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                
-                const offlineContext = new OfflineAudioContext({
-                    numberOfChannels: 1,
-                    length: Math.ceil(audioBuffer.duration * 16000),
-                    sampleRate: 16000
-                });
-
-                const source = offlineContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(offlineContext.destination);
-                source.start();
-
-                showStatus("Processing audio...");
-                const renderedBuffer = await offlineContext.startRendering();
-                const channelData = renderedBuffer.getChannelData(0);
-
-                const chunkSize = 30 * 16000;
-                const chunks = [];
-                let transcription = '';
-
-                for (let i = 0; i < channelData.length; i += chunkSize) {
-                    const chunk = channelData.slice(i, i + chunkSize);
-                    showStatus(`Processing chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(channelData.length/chunkSize)}...`);
-                    
-                    const result = await pipeline(chunk, {
-                        sampling_rate: 16000,
-                        return_timestamps: true,
-                        language: 'en',
-                        task: 'transcribe'
-                    });
-
-                    if (result && result.chunks) {
-                        chunks.push(...result.chunks);
-                    }
-                }
-
-                if (chunks.length === 0) {
-                    showStatus("No speech detected in the audio file");
-                    return;
-                }
-
-                showStatus("Creating VTT file...");
-                let vttContent = 'WEBVTT\n\n';
-                chunks.forEach((chunk, index) => {
-                    if (chunk.timestamp && chunk.timestamp.length === 2) {
-                        const startTime = formatTimestamp(chunk.timestamp[0]);
-                        const endTime = formatTimestamp(chunk.timestamp[1]);
-                        vttContent += `${index + 1}\n`;
-                        vttContent += `${startTime} --> ${endTime}\n`;
-                        vttContent += `${chunk.text.trim()}\n\n`;
-                    }
-                });
-
-                console.log("Generated VTT content:", vttContent);
-
-                const vttBlob = new Blob([vttContent], { type: 'text/vtt' });
-                currentVTTFile = new File([vttBlob], 'transcription.vtt', { type: 'text/vtt' });
-                currentVTTContent = vttContent;
-                document.getElementById('vttFileName').textContent = 'transcription.vtt';
-
-                // Process and display the content
-                processVTTContent(vttContent);
-                showStatus("Transcription completed successfully!");
-
-            } catch (error) {
-                console.error('Transcription error:', error);
-                showStatus("Error during transcription: " + (error.message || "Unknown error"));
-            }
-        }
-
-        function formatTimestamp(seconds) {
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = Math.floor(seconds % 60);
-            const ms = Math.floor((seconds % 1) * 1000);
-            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
-        }
-
-        // Update audio input handler
-        audioInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                showStatus('جاري معالجة الملف الصوتي...');
-                const audioURL = URL.createObjectURL(file);
-                const audioPlayer = document.getElementById('audioPlayer');
-                audioPlayer.src = audioURL;
-                
-                try {
-                    const vttContent = await transcribeAudio(file);
-                    if (vttContent) {
-                        const cleanedContent = cleanVTTContent(vttContent);
-                        processVTTContent(cleanedContent);
-                        displayWords();
-                        showStatus('تم تحميل النص بنجاح');
-                    }
-                } catch (error) {
-                    console.error('Error processing audio:', error);
-                    showStatus('حدث خطأ في معالجة الملف الصوتي');
-                }
-            }
-        });
+        let currentVTTContent = null;
 
         function processVTTContent(vttContent) {
-            console.log("Processing VTT content:", vttContent);
             const lines = vttContent.split('\n');
             let currentCue = null;
             wordTimings = [];
@@ -582,40 +391,68 @@
                 }
             }
             
-            console.log("Word timings created:", wordTimings);
             displayWords();
         }
         
         function displayWords() {
-            console.log("Displaying words, count:", wordTimings.length);
-            const vttViewer = document.getElementById('vttViewer');
             vttViewer.innerHTML = '';
-            
-            if (wordTimings.length === 0) {
-                vttViewer.innerHTML = '<p>No text to display</p>';
-                return;
-            }
-
             const container = document.createElement('div');
             container.style.direction = 'ltr';
-            container.className = 'words-container';
+            container.style.textAlign = 'left';
             
             wordTimings.forEach((timing, index) => {
                 const wordSpan = document.createElement('span');
-                wordSpan.textContent = timing.word + ' ';
                 wordSpan.className = 'vtt-word';
+                wordSpan.textContent = timing.word;
                 wordSpan.dataset.index = index;
+                wordSpan.dataset.start = timing.start;
+                wordSpan.dataset.end = timing.end;
+                
                 wordSpan.onclick = () => {
                     audioPlayer.currentTime = timing.start;
-                    audioPlayer.play().catch(error => {
-                        console.log('Playback failed:', error);
-                    });
+                    audioPlayer.play();
                 };
+                
                 container.appendChild(wordSpan);
+                
+                // Add space after each word
+                if (index < wordTimings.length - 1) {
+                    container.appendChild(document.createTextNode(' '));
+                }
             });
             
             vttViewer.appendChild(container);
-            console.log("Words displayed in viewer");
+        }
+        
+        function updateWordHighlight() {
+            const currentTime = audioPlayer.currentTime;
+            
+            // Find the current word based on timing
+            const newWordIndex = wordTimings.findIndex(timing => 
+                currentTime >= timing.start && currentTime <= timing.end
+            );
+            
+            if (newWordIndex !== currentWordIndex) {
+                // Remove highlight from all words
+                const words = document.querySelectorAll('.vtt-word');
+                words.forEach(word => word.classList.remove('active'));
+                
+                // Add highlight to current word
+                if (newWordIndex !== -1) {
+                    const currentWord = words[newWordIndex];
+                    if (currentWord) {
+                        currentWord.classList.add('active');
+                        // Smooth scroll to the current word
+                        currentWord.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'center'
+                        });
+                    }
+                }
+                
+                currentWordIndex = newWordIndex;
+            }
         }
 
         function timestampToSeconds(timestamp) {
@@ -637,7 +474,7 @@
                 
                 if (line.includes('-->')) {
                     timestamps.push(line);
-                } else if (line && !line.includes('WEBVTT') && !/^\d+$/.test(line) && line) {
+                } else if (!line.includes('WEBVTT') && !/^\d+$/.test(line) && line) {
                     // Remove punctuation and special characters, keep only words
                     const cleanedLine = line.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،.]/g, "")
                                           .replace(/\s+/g, " ")
@@ -779,6 +616,21 @@
         }
 
         // Update file input handlers
+        audioInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                currentAudioFile = file;
+                document.getElementById('audioFileName').textContent = file.name;
+                if (file.type.startsWith('audio/')) {
+                    const url = URL.createObjectURL(file);
+                    audioPlayer.src = url;
+                    audioPlayer.play().catch(error => {
+                        console.log('تعذر التشغيل التلقائي:', error);
+                    });
+                }
+            }
+        });
+
         vttInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
