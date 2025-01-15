@@ -449,11 +449,15 @@
                 source.buffer = audioBuffer;
                 source.connect(offlineContext.destination);
                 source.start();
-                const monoBuffer = await offlineContext.startRendering();
+                const renderedBuffer = await offlineContext.startRendering();
+                
+                // Convert audio buffer to Float32Array
+                const channelData = renderedBuffer.getChannelData(0);
                 
                 showStatus("Processing audio...");
                 // Process with Whisper
-                const result = await pipeline(monoBuffer, {
+                const result = await pipeline(channelData, {
+                    sampling_rate: audioBuffer.sampleRate,
                     chunk_length_s: 30,
                     stride_length_s: 5,
                     return_timestamps: true,
@@ -630,7 +634,7 @@
                 
                 if (line.includes('-->')) {
                     timestamps.push(line);
-                } else if (!line.includes('WEBVTT') && !/^\d+$/.test(line) && line) {
+                } else if (line && !line.includes('WEBVTT') && !/^\d+$/.test(line) && line) {
                     // Remove punctuation and special characters, keep only words
                     const cleanedLine = line.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،.]/g, "")
                                           .replace(/\s+/g, " ")
