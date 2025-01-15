@@ -43,11 +43,15 @@
             overflow-y: auto;
             height: 100vh;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease-in-out;
+            transition: all 0.3s ease-in-out;
+            position: relative;
+            flex-shrink: 0;
         }
 
         .sidebar.hidden {
             transform: translateX(-100%);
+            margin-left: calc(-1 * var(--sidebar-width));
+            width: 0;
         }
 
         .toggle-sidebar {
@@ -89,6 +93,11 @@
             padding: 10px;
             height: 100vh;
             overflow: hidden;
+            transition: margin-left 0.3s ease-in-out;
+        }
+
+        .sidebar.hidden + .main-content {
+            margin-left: 0;
         }
 
         .uploader {
