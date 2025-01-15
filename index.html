@@ -525,12 +525,23 @@
         audioInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
-                currentAudioFile = file;
-                document.getElementById('audioFileName').textContent = file.name;
-                audioPlayer.src = URL.createObjectURL(file);
+                showStatus('جاري معالجة الملف الصوتي...');
+                const audioURL = URL.createObjectURL(file);
+                const audioPlayer = document.getElementById('audioPlayer');
+                audioPlayer.src = audioURL;
                 
-                // Start transcription automatically
-                await transcribeAudio(file);
+                try {
+                    const vttContent = await transcribeAudio(file);
+                    if (vttContent) {
+                        const cleanedContent = cleanVTTContent(vttContent);
+                        processVTTContent(cleanedContent);
+                        displayWords();
+                        showStatus('تم تحميل النص بنجاح');
+                    }
+                } catch (error) {
+                    console.error('Error processing audio:', error);
+                    showStatus('حدث خطأ في معالجة الملف الصوتي');
+                }
             }
         });
 
