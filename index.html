@@ -509,15 +509,15 @@
             let vttContent = 'WEBVTT\n\n';
             const lines = item.vtt.content.split('\n');
             
-            lines.forEach((line, index) => {
-                if (item.vtt.timestamps[index]) {
-                    vttContent += (index + 1) + '\n';
-                    vttContent += item.vtt.timestamps[index] + '\n';
-                    vttContent += line + '\n\n';
+            for (let i = 0; i < lines.length; i++) {
+                if (item.vtt.timestamps[i]) {
+                    vttContent += `${i + 1}\n`;
+                    vttContent += `${item.vtt.timestamps[i]}\n`;
+                    vttContent += `${lines[i]}\n\n`;
                 }
-            });
+            }
             
-            return vttContent;
+            return vttContent.trim() + '\n';
         }
 
         function displaySavedItems() {
@@ -566,6 +566,10 @@
             currentVTTFile = new File([vttBlob], item.vtt.name, { type: 'text/vtt' });
             currentVTTContent = vttContent;
             document.getElementById('vttFileName').textContent = item.vtt.name;
+            
+            // Process VTT content and clear existing display
+            document.querySelector('.vtt-viewer').innerHTML = '';
+            wordTimings = [];
             processVTTContent(vttContent);
         }
 
