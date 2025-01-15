@@ -385,11 +385,13 @@
             isLoading = true;
             
             try {
+                showStatus("Loading Whisper library...");
                 const { pipeline: Pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js');
-                showStatus("Initializing Whisper model...");
                 
+                showStatus("Initializing Whisper model...");
                 pipeline = await Pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
                     quantized: true,
+                    cache: true,
                     progress_callback: function(progress) {
                         if (progress.status === 'download') {
                             const percentage = Math.min(Math.round((progress.loaded / progress.total) * 100), 100);
@@ -436,36 +438,51 @@
             }
 
             try {
-                showStatus("Starting transcription...");
+                showStatus("Preparing audio...");
                 
                 // Convert audio to the required format
-                const audioContext = new AudioContext();
+                const audioContext = new AudioContext({ sampleRate: 16000 }); // Fixed sample rate
                 const arrayBuffer = await audioFile.arrayBuffer();
                 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
                 
-                // Convert to mono and get raw data
-                const offlineContext = new OfflineAudioContext(1, audioBuffer.length, audioBuffer.sampleRate);
+                // Convert to mono and resample if needed
+                const offlineContext = new OfflineAudioContext({
+                    numberOfChannels: 1,
+                    length: Math.ceil(audioBuffer.duration * 16000),
+                    sampleRate: 16000
+                });
+
                 const source = offlineContext.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(offlineContext.destination);
                 source.start();
-                const renderedBuffer = await offlineContext.startRendering();
-                
-                // Convert audio buffer to Float32Array
-                const channelData = renderedBuffer.getChannelData(0);
-                
-                showStatus("Processing audio...");
-                // Process with Whisper
-                const result = await pipeline(channelData, {
-                    sampling_rate: audioBuffer.sampleRate,
-                    chunk_length_s: 30,
-                    stride_length_s: 5,
-                    return_timestamps: true,
-                    language: 'en',
-                    task: 'transcribe'
-                });
 
-                if (!result || !result.chunks || result.chunks.length === 0) {
+                showStatus("Processing audio...");
+                const renderedBuffer = await offlineContext.startRendering();
+                const channelData = renderedBuffer.getChannelData(0);
+
+                // Process in chunks to avoid memory issues
+                const chunkSize = 30 * 16000; // 30 seconds chunks
+                const chunks = [];
+                let transcription = '';
+
+                for (let i = 0; i < channelData.length; i += chunkSize) {
+                    const chunk = channelData.slice(i, i + chunkSize);
+                    showStatus(`Processing chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(channelData.length/chunkSize)}...`);
+                    
+                    const result = await pipeline(chunk, {
+                        sampling_rate: 16000,
+                        return_timestamps: true,
+                        language: 'en',
+                        task: 'transcribe'
+                    });
+
+                    if (result && result.chunks) {
+                        chunks.push(...result.chunks);
+                    }
+                }
+
+                if (chunks.length === 0) {
                     showStatus("No speech detected in the audio file");
                     return;
                 }
@@ -473,7 +490,7 @@
                 showStatus("Creating VTT file...");
                 // Convert to VTT format
                 let vttContent = 'WEBVTT\n\n';
-                result.chunks.forEach((chunk, index) => {
+                chunks.forEach((chunk, index) => {
                     if (chunk.timestamp && chunk.timestamp.length === 2) {
                         const startTime = formatTimestamp(chunk.timestamp[0]);
                         const endTime = formatTimestamp(chunk.timestamp[1]);
